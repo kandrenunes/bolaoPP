@@ -159,19 +159,25 @@ def cadastro(req: CadastroReq):
 
 @app.post("/api/auth/login")
 def login(req: LoginReq):
-    cel = re.sub(r"\D", "", req.celular)
-    # Admin
-    if cel == "admin":
+    
+    # TRATE ADMIN ANTES DE QUALQUER COISA
+    if req.celular.strip().lower() == "admin":
         if req.senha != SENHA_ADMIN_ENV:
             raise HTTPException(401, "Senha incorreta")
         token = criar_token({"sub": "admin", "role": "admin"})
         return {"token": token, "uid": "admin", "nome": "Admin", "role": "admin"}
+
+    # Só depois trate como celular numérico
+    cel = re.sub(r"\D", "", req.celular)
+
     usuarios = _usuarios_db()
     u = usuarios.get(cel)
     if not u:
         raise HTTPException(404, "Usuario nao encontrado")
+
     if not verificar_senha(req.senha, u["senha"]):
         raise HTTPException(401, "Senha incorreta")
+
     token = criar_token({"sub": cel, "role": "user"})
     return {"token": token, "uid": cel, "nome": u["nome"], "role": "user"}
 
