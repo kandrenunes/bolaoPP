@@ -19,7 +19,7 @@ from backend.auth import (
 # acerto para erro de PORT não integer
 if __name__ == "__main__":
     import uvicorn, os
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 # ── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Bolao Survivor API", version="1.0.0")
