@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
-from db import init_db, get_db, db_get_usuarios, db_save_usuario, db_get_apostas, db_save_apostas, db_get_resultados, db_save_resultado, db_get_creditos_usuario
+from backend.db import init_db, get_db, db_get_usuarios, db_save_usuario, db_get_apostas, db_save_apostas, db_get_resultados, db_save_resultado, db_get_creditos_usuario
 from backend.core import *
 from backend.auth import (
     hash_senha, verificar_senha, criar_token,
