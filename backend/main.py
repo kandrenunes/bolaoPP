@@ -158,12 +158,11 @@ def cadastro(req: CadastroReq):
     token = criar_token({"sub": cel, "role": "user"})
     return {"token": token, "uid": cel, "nome": req.nome}
 
-
 @app.post("/api/auth/login")
 def login(req: LoginReq):
     cel = re.sub(r"\D", "", req.celular)
-    # Admin
-    if cel == "admin":
+    # probelma de acesso com user admin
+    if req.celular.strip().lower() == "admin":
         if req.senha != SENHA_ADMIN_ENV:
             raise HTTPException(401, "Senha incorreta")
         token = criar_token({"sub": "admin", "role": "admin"})
