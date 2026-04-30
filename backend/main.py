@@ -9,12 +9,21 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
-from db import init_db, get_db, db_get_usuarios, db_save_usuario, db_get_apostas, db_save_apostas, db_get_resultados, db_save_resultado, db_get_creditos_usuario
+from backend.db import init_db, get_db, db_get_usuarios, db_save_usuario, db_get_apostas, db_save_apostas, db_get_resultados, db_save_resultado, db_get_creditos_usuario
 from backend.core import *
 from backend.auth import (
     hash_senha, verificar_senha, criar_token,
     get_usuario_atual, get_admin_atual, SENHA_ADMIN as SENHA_ADMIN_ENV
 )
+
+from pydantic import BaseModel
+
+
+
+# acerto para erro de PORT não integer
+if __name__ == "__main__":
+    import uvicorn, os
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 # ── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Bolao Survivor API", version="1.0.0")
@@ -105,6 +114,13 @@ class CreditarReq(BaseModel):
 class ConfigReq(BaseModel):
     rodada_inicial: int
 
+class LoginAdminReq(BaseModel):
+    username: str
+    senha: str
+
+class LoginUserReq(BaseModel):
+    celular: str
+    senha: str
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def _mapa_jogos(num_rodada: int):
@@ -152,24 +168,53 @@ def cadastro(req: CadastroReq):
     return {"token": token, "uid": cel, "nome": req.nome}
 
 
-@app.post("/api/auth/login")
-def login(req: LoginReq):
+
+@app.post("/api/auth/login-admin")
+def login_admin(req: LoginAdminReq):
+    if req.username.strip().lower() != "admin":
+        raise HTTPException(401, "Usuario invalido")
+
+    if req.senha != SENHA_ADMIN_ENV:
+        raise HTTPException(401, "Senha incorreta")
+
+    token = criar_token({
+        "sub": "admin",
+        "role": "admin"
+    })
+
+    return {
+        "token": token,
+        "uid": "admin",
+        "nome": "Administrador",
+        "role": "admin"
+    }
+
+@app.post("/api/auth/login-user")
+def login_user(req: LoginUserReq):
+    import re
+
     cel = re.sub(r"\D", "", req.celular)
-    # Admin
-    if cel == "admin":
-        if req.senha != SENHA_ADMIN_ENV:
-            raise HTTPException(401, "Senha incorreta")
-        token = criar_token({"sub": "admin", "role": "admin"})
-        return {"token": token, "uid": "admin", "nome": "Admin", "role": "admin"}
+
     usuarios = _usuarios_db()
     u = usuarios.get(cel)
+
     if not u:
         raise HTTPException(404, "Usuario nao encontrado")
+
     if not verificar_senha(req.senha, u["senha"]):
         raise HTTPException(401, "Senha incorreta")
-    token = criar_token({"sub": cel, "role": "user"})
-    return {"token": token, "uid": cel, "nome": u["nome"], "role": "user"}
 
+    token = criar_token({
+        "sub": cel,
+        "role": "user"
+    })
+
+    return {
+        "token": token,
+        "uid": cel,
+        "nome": u["nome"],
+        "role": "user"
+    }
 
 # ══════════════════════════════════════════════════════════════════════════════
 # USUÁRIO
@@ -322,8 +367,29 @@ def get_apostas_rodada_ativa(atual=Depends(get_usuario_atual)):
                 "historico": f.get("historico", []),
                 "times_usados": f.get("times_usados", []),
             })
-    return {"rodada": r_at, "funis_sem_aposta": sem_aposta, "funis_apostados": apostados}
+    # mudança 3004
+    if not f_vivos:
+        return {
+            "rodada": r_at,
+            "status": "sem_funis",
+            "funis_sem_aposta": [],
+            "funis_apostados": []
+        }
 
+    if not sem_aposta and not apostados:
+        return {
+            "rodada": r_at,
+            "status": "vazio",
+            "funis_sem_aposta": [],
+            "funis_apostados": []
+        }
+
+    return {
+        "rodada": r_at,
+        "status": "ok",
+        "funis_sem_aposta": sem_aposta,
+        "funis_apostados": apostados
+    }
 
 @app.post("/api/apostas/nova-entrada")
 def nova_entrada(req: ApostaReq, atual=Depends(get_usuario_atual)):
@@ -771,3 +837,9 @@ if os.path.exists(FRONTEND_DIR):
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    
+from backend.services.rodada_service import fechar_rodada
+
+@app.post("/api/admin/fechar-rodada")
+def fechar(num: int, admin=Depends(get_admin_atual)):
+    return fechar_rodada(num, app.state.rodadas)    

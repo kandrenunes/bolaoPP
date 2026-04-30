@@ -4,7 +4,7 @@ import csv, os, json, re, hashlib
 from collections import defaultdict
 from datetime import datetime
 
-from db import (
+from backend.db import (
     get_db,
     db_get_config, db_set_config,
     db_get_usuarios, db_save_usuario,
@@ -310,7 +310,16 @@ def funis_do_usuario(uid: str, gid: str = "") -> list:
 
 
 def funis_vivos_usuario(uid: str, gid: str = "") -> list:
-    return [f for f in funis_do_usuario(uid, gid) if not f.get("eliminado", False)]
+    funis = funis_do_usuario(uid, gid)
+
+    if not funis:
+        print(f"[WARN] Usuario {uid} sem funis")
+
+    vivos = [f for f in funis if not f.get("eliminado", False)]
+
+    print(f"[DEBUG] vivos={len(vivos)} total={len(funis)}")
+
+    return vivos
 
 
 def funis_do_grupo(gid: str) -> list:
@@ -404,8 +413,20 @@ def processar_eliminacao(gid: str, num_rodada: int):
     for f in funis_do_grp:
         fid = f["id"]
         r   = resultados_funil[fid]
+        # mudança sugerida em 30/04
         if not r["apostou"]:
+            f["eliminado"] = True
+            f["eliminado_na_rodada"] = num_rodada
+
+            f.setdefault("historico", []).append({
+                "rodada": num_rodada,
+                "time": None,
+                "resultado": "nao_apostou"
+            })
+
+            eliminados_agora.append(fid)
             continue
+
         if todos_eliminariam:
             if r["time"] not in f["times_usados"]:
                 f["times_usados"].append(r["time"])
@@ -485,12 +506,25 @@ def gerar_apostas_automaticas(num_rodada: int, rodadas: dict) -> list:
                                    "gerada": False, "motivo": "Sem times disponiveis"})
                 continue
             time_auto = disponiveis[0]
+            #correção sugerida em 30/04 chatGPT            
             novas_apostas[chave_aposta] = {
                 "uid": uid, "gid": gid, "fid": fid,
                 "rodada": num_rodada, "time": time_auto,
                 "apostado_em": datetime.now().isoformat(timespec="seconds"),
                 "automatica": True,
             }
+
+            # NOVO BLOCO
+            f.setdefault("times_usados", [])
+            if time_auto not in f["times_usados"]:
+                f["times_usados"].append(time_auto)
+
+            f.setdefault("historico", []).append({
+                "rodada": num_rodada,
+                "time": time_auto,
+                "resultado": "auto"
+            })
+
             relatorio.append({
                 "fid": fid, "uid": uid, "gid": gid, "gerada": True,
                 "time": time_auto, "nome": usuarios.get(uid, {}).get("nome", uid),
@@ -499,5 +533,6 @@ def gerar_apostas_automaticas(num_rodada: int, rodadas: dict) -> list:
     if novas_apostas:
         with get_db() as db:
             db_save_apostas(db, novas_apostas)
+            db_save_funis(db, funis)
 
     return relatorio
