@@ -1,7 +1,12 @@
 from backend.core import gerar_apostas_automaticas, processar_eliminacao
-from backend.config import carregar_config, salvar_config, prazo_expirado
+from backend.core import (
+    gerar_apostas_automaticas,
+    processar_eliminacao,
+    carregar_config,
+    salvar_config,
+    prazo_expirado
+    )
 from backend.db import get_db, db_get_grupos
-
 
 def fechar_rodada(num_rodada: int, rodadas: dict):
     cfg = carregar_config()
