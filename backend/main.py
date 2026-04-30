@@ -16,15 +16,6 @@ from backend.auth import (
     get_usuario_atual, get_admin_atual, SENHA_ADMIN as SENHA_ADMIN_ENV
 )
 
-from pydantic import BaseModel
-
-
-
-# acerto para erro de PORT não integer
-if __name__ == "__main__":
-    import uvicorn, os
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-
 # ── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Bolao Survivor API", version="1.0.0")
 
@@ -168,33 +159,15 @@ def cadastro(req: CadastroReq):
     return {"token": token, "uid": cel, "nome": req.nome}
 
 
-
-@app.post("/api/auth/login-admin")
-def login_admin(req: LoginAdminReq):
-    if req.username.strip().lower() != "admin":
-        raise HTTPException(401, "Usuario invalido")
-
-    if req.senha != SENHA_ADMIN_ENV:
-        raise HTTPException(401, "Senha incorreta")
-
-    token = criar_token({
-        "sub": "admin",
-        "role": "admin"
-    })
-
-    return {
-        "token": token,
-        "uid": "admin",
-        "nome": "Administrador",
-        "role": "admin"
-    }
-
-@app.post("/api/auth/login-user")
-def login_user(req: LoginUserReq):
-    import re
-
+@app.post("/api/auth/login")
+def login(req: LoginReq):
     cel = re.sub(r"\D", "", req.celular)
-
+    # Admin
+    if cel == "admin":
+        if req.senha != SENHA_ADMIN_ENV:
+            raise HTTPException(401, "Senha incorreta")
+        token = criar_token({"sub": "admin", "role": "admin"})
+        return {"token": token, "uid": "admin", "nome": "Admin", "role": "admin"}
     usuarios = _usuarios_db()
     u = usuarios.get(cel)
 
@@ -203,18 +176,9 @@ def login_user(req: LoginUserReq):
 
     if not verificar_senha(req.senha, u["senha"]):
         raise HTTPException(401, "Senha incorreta")
+    token = criar_token({"sub": cel, "role": "user"})
+    return {"token": token, "uid": cel, "nome": u["nome"], "role": "user"}
 
-    token = criar_token({
-        "sub": cel,
-        "role": "user"
-    })
-
-    return {
-        "token": token,
-        "uid": cel,
-        "nome": u["nome"],
-        "role": "user"
-    }
 
 # ══════════════════════════════════════════════════════════════════════════════
 # USUÁRIO
@@ -307,7 +271,6 @@ def get_rodadas():
         "rodadas_com_resultado": [int(r) for r in resultados],
         "aberta_e_valida": rodada_aberta_e_valida(),
     }
-
 
 @app.get("/api/rodadas/{num}")
 def get_rodada(num: int):
