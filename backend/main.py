@@ -160,14 +160,31 @@ def cadastro(req: CadastroReq):
 
 @app.post("/api/auth/login")
 def login(req: LoginReq):
-    cel = re.sub(r"\D", "", req.celular)
-    # probelma de acesso com user admin
-    if req.celular.strip().lower() == "admin":
+
+    raw = req.celular.strip().lower()
+
+    # ADMIN PRIMEIRO
+    if raw == "admin":
         if req.senha != SENHA_ADMIN_ENV:
             raise HTTPException(401, "Senha incorreta")
+
         token = criar_token({"sub": "admin", "role": "admin"})
-        return {"token": token, "uid": "admin", "nome": "Admin", "role": "admin"}
+        return {
+            "token": token,
+            "uid": "admin",
+            "nome": "Admin",
+            "role": "admin"
+        }
+
+    # NORMAL USER
+    cel = re.sub(r"\D", "", req.celular or "")
+
     usuarios = _usuarios_db()
+
+    print("LOGIN:", req.celular)
+    print("CEL:", cel)
+    print("DB KEYS:", list(usuarios.keys()))
+
     u = usuarios.get(cel)
 
     if not u:
@@ -175,8 +192,15 @@ def login(req: LoginReq):
 
     if not verificar_senha(req.senha, u["senha"]):
         raise HTTPException(401, "Senha incorreta")
+
     token = criar_token({"sub": cel, "role": "user"})
-    return {"token": token, "uid": cel, "nome": u["nome"], "role": "user"}
+
+    return {
+        "token": token,
+        "uid": cel,
+        "nome": u["nome"],
+        "role": "user"
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
